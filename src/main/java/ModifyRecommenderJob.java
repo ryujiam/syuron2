@@ -153,11 +153,11 @@ public class ModifyRecommenderJob{
             Randoms.seed(1);
             generateDataModel();
             cvEvalResults = new HashMap<>();
+            Randoms.seed(conf.getLong("rec.random.seed", 1L));
             while (dataModel.hasNextFold()) {
                 dataModel.nextFold();
                 context.setDataModel(dataModel);
                 generateSimilarity(context);
-                Randoms.seed(conf.getLong("rec.random.seed"));
                 recommender.train(context);
                 executeEvaluator(recommender, context);
             }

@@ -66,7 +66,8 @@ public class EfmRecommender extends TensorRecommender {
     @Override
     protected void setup() throws LibrecException {
         super.setup();
-        scoreScale = maxRate - minRate;
+        //scoreScale = maxRate - minRate;
+        scoreScale = maxRate;
         explicitFeatureNum = conf.getInt("rec.factor.explicit", 5);
         hiddenFeatureNum = numFactors - explicitFeatureNum;
         lambdaX = conf.getDouble("rec.regularization.lambdax", 0.001);
@@ -174,13 +175,13 @@ public class EfmRecommender extends TensorRecommender {
             }
             for (int i = 0; i < numberOfFeatures; i++) {
                 if (featureValues[i] != 0.0) {
-                    if (doTfIdf) {
+                    if (doTfIdf || doNormal) {
                         double lowerLimitUserFeatureValues = conf.getDouble("rec.weight.lowerLimit", 0.0);
                         if (featureValues[i] > lowerLimitUserFeatureValues) {
                             double v = 1 + (scoreScale - 1) * (2 / (1 + Math.exp(-featureValues[i])) - 1);
                             userFeatureAttentionTable.put(u, i, v);
                         }
-                    } else if (!doTfIdf){
+                    } else if (!doTfIdf || !doNormal){
                         double v = 1 + (scoreScale - 1) * (2 / (1 + Math.exp(-featureValues[i])) - 1);
                         userFeatureAttentionTable.put(u, i, v);
                     }
@@ -440,15 +441,24 @@ public class EfmRecommender extends TensorRecommender {
                     for (String p : uHList) {
                         if (p.isEmpty())
                             continue;
-                        if (!userFeatureDict.containsKey(userIndex)) {
-                            userFeatureDict.put(userIndex, p);
-                        } else {
-                            userFeatureDict.put(userIndex, userFeatureDict.get(userIndex) + " " + p);
+                        else {
+                            String updateSentiment = "";
+                            String sentimentWord = p.split(":")[0];
+                            double sentimentValue = Double.valueOf(p.split(":")[1]);
+                            double coefficient = conf.getDouble("rec.weight.coefficient", 1.0);
+                            updateSentiment += sentimentWord + ":" + String.valueOf(
+                                         coefficient * sentimentValue
+                            );
+                            if (!userFeatureDict.containsKey(userIndex)) {
+                                userFeatureDict.put(userIndex, updateSentiment);
+                            } else {
+                                userFeatureDict.put(userIndex, userFeatureDict.get(userIndex) + " " + updateSentiment);
+                            }
+                            if (!itemFeatureDict.containsKey(itemIndex))
+                                itemFeatureDict.put(itemIndex, updateSentiment);
+                            else
+                                itemFeatureDict.put(itemIndex, itemFeatureDict.get(itemIndex) + " " + updateSentiment);
                         }
-                        if (!itemFeatureDict.containsKey(itemIndex))
-                            itemFeatureDict.put(itemIndex, p);
-                        else
-                            itemFeatureDict.put(itemIndex, itemFeatureDict.get(itemIndex) + " " + p);
                     }
                 }
                 idx++;
@@ -470,7 +480,7 @@ public class EfmRecommender extends TensorRecommender {
         }
 
 
-        double cofficient = conf.getDouble("rec.weight.cofficient", 1.0);
+        double cofficient = conf.getDouble("rec.weight.coefficient", 1.0);
 
 
         for (TensorEntry te : trainTensor) {
