@@ -160,6 +160,8 @@ public class EfmRecommender extends TensorRecommender {
 
         // compute UserFeatureAttention
         Table<Integer, Integer, Double> userFeatureAttentionTable = HashBasedTable.create();
+        double userSlope = conf.getDouble("rec.efm.user.slope", 1.0);
+        double userBias = conf.getDouble("rec.efm.user.bias", 0.0);
         for (int u : userFeatureDict.keySet()) {
             double[] featureValues = new double[numberOfFeatures];
             String[] fList = userFeatureDict.get(u).split(" ");
@@ -178,11 +180,11 @@ public class EfmRecommender extends TensorRecommender {
                     if (doTfIdf || doNormal) {
                         double lowerLimitUserFeatureValues = conf.getDouble("rec.weight.lowerLimit", 0.0);
                         if (featureValues[i] > lowerLimitUserFeatureValues) {
-                            double v = 1 + (scoreScale - 1) * (2 / (1 + Math.exp(-featureValues[i])) - 1);
+                            double v = 1 + (scoreScale - 1) * (2 / (1 + Math.exp(linearTrans(userSlope, userBias, -featureValues[i]))) - 1);
                             userFeatureAttentionTable.put(u, i, v);
                         }
                     } else if (!doTfIdf || !doNormal){
-                        double v = 1 + (scoreScale - 1) * (2 / (1 + Math.exp(-featureValues[i])) - 1);
+                        double v = 1 + (scoreScale - 1) * (2 / (1 + Math.exp(linearTrans(userSlope, userBias, -featureValues[i]))) - 1);
                         userFeatureAttentionTable.put(u, i, v);
                     }
                 }
@@ -192,6 +194,8 @@ public class EfmRecommender extends TensorRecommender {
 
         // Compute ItemFeatureQuality
         Table<Integer, Integer, Double> itemFeatureQualityTable = HashBasedTable.create();
+        double itemSlope = conf.getDouble("rec.efm.item.slope", 1.0);
+        double itemBias = conf.getDouble("rec.efm.item.bias", 0.0);
         for (int p : itemFeatureDict.keySet()) {
             double[] featureValues = new double[numberOfFeatures];
             String[] fList = itemFeatureDict.get(p).split(" ");
@@ -207,11 +211,11 @@ public class EfmRecommender extends TensorRecommender {
                         //todo need to modify rec.weight.LowerLimit to rec.weight.itemLowerLimit
                         double lowerLimitItemFeatureValues = conf.getDouble("rec.weight.lowerLimit", 0.0);
                         if (featureValues[i] > lowerLimitItemFeatureValues || featureValues[i] < -lowerLimitItemFeatureValues) {
-                            double v = 1 + (scoreScale - 1) / (1 + Math.exp(-featureValues[i]));
+                            double v = 1 + (scoreScale - 1) / (1 + Math.exp(linearTrans(itemSlope, itemBias, -featureValues[i])));
                             itemFeatureQualityTable.put(p, i, v);
                         }
                     } else if (!doTfIdf){
-                        double v = 1 + (scoreScale - 1) / (1 + Math.exp(-featureValues[i]));
+                        double v = 1 + (scoreScale - 1) / (1 + Math.exp(linearTrans(itemSlope, itemBias, -featureValues[i])));
                         itemFeatureQualityTable.put(p, i, v);
                     }
                 }
@@ -638,6 +642,10 @@ public class EfmRecommender extends TensorRecommender {
         LOG.info("item " + disRecommendedItemId + "'s feature values are\n" + disRecItemFeatureSb);
         LOG.info("So we recommend item " + recommendedItemId + ", disRecommend item " + disRecommendedItemId + " to user " + userId);
         LOG.info("___________________________");
+    }
+
+    protected double linearTrans(double slope, double bias, double x) {
+        return slope * x + bias;
     }
 
     @Override
