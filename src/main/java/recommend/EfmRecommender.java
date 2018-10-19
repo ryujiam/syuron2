@@ -11,6 +11,7 @@ import org.apache.commons.lang.StringUtils;
 
 import javax.swing.*;
 import java.util.*;
+import java.util.Vector;
 
 /**
  * EFM Recommender
@@ -139,7 +140,13 @@ public class EfmRecommender extends TensorRecommender {
             recItemFeatureValuesVectorList.add(var, null);
         }
 
-        if (doNormal && !doTfIdf) {
+
+        Table<Integer, String, String> helpUserFeatureTable = HashBasedTable.create();
+        Table<Integer, Integer, Double> helpUserSimilarityTable = HashBasedTable.create();
+        if (doNormal && doSim) {
+            addHelpDict(helpUserFeatureTable, helpUserSimilarityTable);
+        }
+        if (doNormal && !doTfIdf && !doSim) {
             addSentiment(userFeatureDict, itemFeatureDict);
         }
         if (!doNormal && doTfIdf) {
@@ -190,6 +197,7 @@ public class EfmRecommender extends TensorRecommender {
                 }
             }
         }
+        updateFeatureTableBySimilarity(userFeatureAttentionTable, helpUserFeatureTable, helpUserSimilarityTable, "user");
         userFeatureAttention = new SequentialAccessSparseMatrix(numUsers, numberOfFeatures, userFeatureAttentionTable);
 
         // Compute ItemFeatureQuality
@@ -410,6 +418,145 @@ public class EfmRecommender extends TensorRecommender {
         }
     }
 
+    protected void addHelpDict(Table helpFeatureTable, Table helpSimilarityTable) throws IllegalAccessError{
+        BiMap<Integer, String> userHelpPairsMappingData = DataFrame.getInnerMapping("help_user").inverse();
+        BiMap<Integer, String> featureSentimentHelpPairsMappingData = DataFrame.getInnerMapping("help_sentiment").inverse();
+        BiMap<Integer, String> featureSentimentSimPairsMappingData = DataFrame.getInnerMapping("help_sim").inverse();
+        if (userHelpPairsMappingData == null || featureSentimentHelpPairsMappingData == null) {
+            throw new IllegalAccessError("userHelpPairsMappingData or featureSentimentHelpPairsMappingData is null");
+        }
+
+        for (TensorEntry te : trainTensor) {
+            int[] entryKeys = te.keys();
+            int userIndex = entryKeys[0];
+            int itemIndex = entryKeys[1];
+            int userHelpPairsIndex = entryKeys[3];
+            int featureSentimentHelpPairsIndex = entryKeys[5];
+
+            String userHelpPairsString = userHelpPairsMappingData.get(userHelpPairsIndex)
+                    .replaceAll("</endperson[0-9]+>", "");
+            /**
+             * uHPList = [helpUserIdx1, helpUserIdxk...]
+             */
+            String[] uHPList = userHelpPairsString.split(";;;;");
+
+            String featureSentimentHelpPairsString = featureSentimentHelpPairsMappingData.get(featureSentimentHelpPairsIndex)
+                    .replaceAll("</endperson[0-9]+>", "");
+            /**
+             * userFSHPList [sentimentString1,setimentString2,...]
+             */
+            String[] userFSHPList = featureSentimentHelpPairsString.split(";;;;");
+            int idx = 0;
+            for (String helpUserIdxStr : uHPList) {
+                String[] helpUserSentimentsList = userFSHPList[idx].split(" ");
+
+                for (String helpUserSentiment : helpUserSentimentsList) {
+                    String sentimentWord = helpUserSentiment.split(":")[0];
+
+                    if (!helpFeatureTable.contains(userIndex, sentimentWord) && !StringUtils.isEmpty(sentimentWord)) {
+                        String sentimentValue = helpUserSentiment.split(":")[1];
+                        String idxAndValue = helpUserIdxStr + ":" + sentimentValue;
+                        helpFeatureTable.put(userIndex, sentimentWord, idxAndValue);
+                    } else if (!StringUtils.isEmpty(sentimentWord)){
+                        String sentimentValue = helpUserSentiment.split(":")[1];
+                        String idxAndValue = helpUserIdxStr + ":" + sentimentValue;
+                        String addToIdxAndValue = helpFeatureTable.get(userIndex, sentimentWord) + " " + idxAndValue;
+                        helpFeatureTable.put(userIndex, sentimentWord, addToIdxAndValue);
+                    }
+                }
+
+                if (featureSentimentHelpPairsMappingData != null && !StringUtils.isEmpty(helpUserIdxStr)) {
+                    int firstIdx, secondIdx;
+                    if (userIndex <= Integer.valueOf(helpUserIdxStr)) {
+                        firstIdx = userIndex;
+                        secondIdx = Integer.valueOf(helpUserIdxStr);
+                    } else {
+                        firstIdx = Integer.valueOf(helpUserIdxStr);
+                        secondIdx = userIndex;
+                    }
+
+                    if (!helpSimilarityTable.contains(firstIdx, secondIdx)) {
+                        helpSimilarityTable.put(firstIdx, secondIdx, simWeight(te, idx, featureSentimentSimPairsMappingData));
+                    }
+                }
+                idx++;
+            }
+        }
+    }
+
+    protected void updateFeatureTableBySimilarity(Table<Integer, Integer, Double> featureTable, Table<Integer, String, String> helpFeatureTable ,
+                                                  Table<Integer, Integer, Double> similarityTable, String userOrItemName) throws LibrecException{
+        double coefficientBeta = conf.getDouble("rec.weight.beta", 0.7);
+        for (Table.Cell<Integer, String, String> cell : helpFeatureTable.cellSet()) {
+            int helpedIdx = cell.getRowKey();
+            String sentimentWord = cell.getColumnKey();
+            String[] helpIdxAndValueList = cell.getValue().split(" ");
+
+            if (!featureDict.containsKey(sentimentWord))
+                continue;
+
+            int featureIdx = featureDict.get(sentimentWord);
+            double featureFrequency = 0.0;
+            double weightSlope = 0.0;
+            double numberOfHelpFeature = helpIdxAndValueList.length;
+            for (String helpIdxAndValue : helpIdxAndValueList) {
+                int helpIdx = Integer.valueOf(helpIdxAndValue.split(":")[0]);
+                double sentimentValue = Double.valueOf(helpIdxAndValue.split(":")[1]);
+
+                int firstIdx, secondIdx;
+                if (helpedIdx <= helpIdx) {
+                    firstIdx = helpedIdx;
+                    secondIdx = helpIdx;
+                } else {
+                    firstIdx = helpIdx;
+                    secondIdx = helpedIdx;
+                }
+
+                double simValue = similarityTable.get(firstIdx, secondIdx);
+                if (userOrItemName.equals("user")) {
+                    weightSlope += simValue * Math.abs(sentimentValue) / numberOfHelpFeature;
+                    featureFrequency += Math.abs(sentimentValue);
+                }
+                else if (userOrItemName.equals("item")) {
+                    weightSlope += simValue * sentimentValue / numberOfHelpFeature;
+                    featureFrequency += sentimentValue;
+                }
+            }
+            if (featureFrequency != 0.0) {
+                double bias = conf.getDouble("rec.efm." + userOrItemName + "." + "bias");
+                double slopeCoefficient = conf.getDouble("rec.weight.slopeCoefficient", 1.0);
+                double updateFeatureValue;
+                if (userOrItemName.equals("user")) {
+                    updateFeatureValue = getUserFeatureAttentionValue(slopeCoefficient * weightSlope, bias, featureFrequency);
+                } else if (userOrItemName.equals("item")) {
+                    updateFeatureValue = getItemFeatureQualityValue(slopeCoefficient * weightSlope, bias, featureFrequency);
+                } else {
+                    throw new LibrecException("invalid conf bias name" + userOrItemName);
+
+                }
+
+                if (featureTable.contains(helpedIdx, featureIdx)) {
+                    //featureTable.put(helpedIdx, featureIdx,
+                    //        coefficientBeta * featureTable.get(helpedIdx, featureIdx) + (1.0 - coefficientBeta) * updateFeatureValue
+                    //);
+                } else {
+                    //if ((0.0 < updateFeatureValue && updateFeatureValue < 1.7) || updateFeatureValue > 4.0)
+                    if ( updateFeatureValue > 4.5)
+                        featureTable.put(helpedIdx, featureIdx, updateFeatureValue);
+                }
+            }
+        }
+    }
+
+    protected double getUserFeatureAttentionValue(double userSlope, double userBias, double userFeatureFrequency) {
+        return 1 + (scoreScale - 1) * (2 / (1 + Math.exp(linearTrans(userSlope, userBias, -userFeatureFrequency))) - 1);
+    }
+
+    protected double getItemFeatureQualityValue(double itemSlope, double itemBias, double itemFeatureFrequency) {
+        //todo
+        return 1.0;
+    }
+
     protected void addSentiment(Map userFeatureDict, Map itemFeatureDict) {
         //featureSentimemtPairsMappingData = DataFrame.getInnerMapping("sentiment").inverse();
         BiMap<Integer, String> userHelpPairsMappingData = DataFrame.getInnerMapping("help_user").inverse();
@@ -560,7 +707,10 @@ public class EfmRecommender extends TensorRecommender {
     }
 
 
-    protected double simWeight(TensorEntry te, int listIdx, BiMap<Integer, String> featureSentimentSimParisMappingData) {
+    protected double simWeight(TensorEntry te, int listIdx, BiMap<Integer, String> featureSentimentSimParisMappingData) throws IllegalAccessError{
+        if (doSim && featureSentimentSimParisMappingData == null) {
+            throw new IllegalAccessError("featureSentimentSimPairsMappingData is null");
+        }
         if (!doSim)
             return 1.0;
 
