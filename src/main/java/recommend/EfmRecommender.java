@@ -514,8 +514,10 @@ public class EfmRecommender extends TensorRecommender {
 
                 double simValue = similarityTable.get(firstIdx, secondIdx);
                 if (userOrItemName.equals("user")) {
-                    weightSlope += simValue * Math.abs(sentimentValue) / numberOfHelpFeature;
-                    featureFrequency += Math.abs(sentimentValue);
+                    if (simValue >= 0.15) {
+                        weightSlope += simValue * Math.abs(sentimentValue) / numberOfHelpFeature;
+                        featureFrequency += Math.abs(sentimentValue);
+                    }
                 }
                 else if (userOrItemName.equals("item")) {
                     weightSlope += simValue * sentimentValue / numberOfHelpFeature;
@@ -536,20 +538,27 @@ public class EfmRecommender extends TensorRecommender {
                 }
 
                 if (featureTable.contains(helpedIdx, featureIdx)) {
-                    //featureTable.put(helpedIdx, featureIdx,
-                    //        coefficientBeta * featureTable.get(helpedIdx, featureIdx) + (1.0 - coefficientBeta) * updateFeatureValue
-                    //);
+                    featureTable.put(helpedIdx, featureIdx,
+                            coefficientBeta * featureTable.get(helpedIdx, featureIdx) + (1.0 - coefficientBeta) * updateFeatureValue
+                    );
                 } else {
                     //if ((0.0 < updateFeatureValue && updateFeatureValue < 1.7) || updateFeatureValue > 4.0)
-                    if ( updateFeatureValue > 4.5)
-                        featureTable.put(helpedIdx, featureIdx, updateFeatureValue);
+                    //if ( updateFeatureValue > 3.0)
+                        //featureTable.put(helpedIdx, featureIdx, updateFeatureValue);
+                    //featureTable.put(helpedIdx, featureIdx, 3.0);
                 }
             }
         }
     }
 
     protected double getUserFeatureAttentionValue(double userSlope, double userBias, double userFeatureFrequency) {
-        return 1 + (scoreScale - 1) * (2 / (1 + Math.exp(linearTrans(userSlope, userBias, -userFeatureFrequency))) - 1);
+        //todo
+        //return 1 + (scoreScale - 1) * (2 / (1 + Math.exp(linearTrans(userSlope, userBias, -userFeatureFrequency))) - 1);
+        //fuzzy gaussian membership function(experience)
+        //return 1 + (scoreScale - 1) *(Math.exp(-Math.pow((8 - userFeatureFrequency), 2) / 2 * Math.pow((1 - userSlope), 2)));
+        //experience
+        return 1 + (scoreScale - 1) * (2 / (1 + Math.exp(linearTrans(-6.0 , 0.0, userSlope))) - 1);
+        //return 1 + (scoreScale - 1) * (2 / (1 + Math.exp(linearTrans(0.9, 0.5, -userFeatureFrequency))) - 1);
     }
 
     protected double getItemFeatureQualityValue(double itemSlope, double itemBias, double itemFeatureFrequency) {
@@ -797,6 +806,10 @@ public class EfmRecommender extends TensorRecommender {
     protected double linearTrans(double slope, double bias, double x) {
         return slope * x + bias;
     }
+
+    protected double sigmoid(double gain, double bias, double x) { return 1.0 / (1.0 + Math.exp(-gain * x + bias)); }
+
+    //protected double fuzzyGaussian
 
     @Override
     protected double predict(int[] indices) {
