@@ -43,6 +43,7 @@ public class EfmRecommender extends TensorRecommender {
     protected SequentialAccessSparseMatrix trainMatrix;
 
     public BiMap<Integer, String> featureSentimemtPairsMappingData;
+    public BiMap<Integer, String> userPairsMappingData;
 
     protected ArrayList<Map<Integer, Double>> userFeatureValuesList;
     protected DenseMatrix userFeatureValuesMatrix;
@@ -168,7 +169,8 @@ public class EfmRecommender extends TensorRecommender {
         // compute UserFeatureAttention
         Table<Integer, Integer, Double> userFeatureAttentionTable = HashBasedTable.create();
         double userSlope = conf.getDouble("rec.efm.user.slope", 1.0);
-        double userBias = conf.getDouble("rec.efm.user.bias", 0.0);
+        //double userBias = conf.getDouble("rec.efm.user.bias", 0.0);
+        double userBias = 0.0;
         for (int u : userFeatureDict.keySet()) {
             double[] featureValues = new double[numberOfFeatures];
             String[] fList = userFeatureDict.get(u).split(" ");
@@ -422,6 +424,8 @@ public class EfmRecommender extends TensorRecommender {
         BiMap<Integer, String> userHelpPairsMappingData = DataFrame.getInnerMapping("help_user").inverse();
         BiMap<Integer, String> featureSentimentHelpPairsMappingData = DataFrame.getInnerMapping("help_sentiment").inverse();
         BiMap<Integer, String> featureSentimentSimPairsMappingData = DataFrame.getInnerMapping("help_sim").inverse();
+        BiMap<Integer, String> userPairsMappingData = DataFrame.getInnerMapping("user").inverse();
+
         if (userHelpPairsMappingData == null || featureSentimentHelpPairsMappingData == null) {
             throw new IllegalAccessError("userHelpPairsMappingData or featureSentimentHelpPairsMappingData is null");
         }
@@ -430,6 +434,7 @@ public class EfmRecommender extends TensorRecommender {
             int[] entryKeys = te.keys();
             int userIndex = entryKeys[0];
             int itemIndex = entryKeys[1];
+            //note rating don't include entryKeys so the number of entryKeys is |Attribute| - 1
             int userHelpPairsIndex = entryKeys[3];
             int featureSentimentHelpPairsIndex = entryKeys[5];
 
@@ -544,7 +549,7 @@ public class EfmRecommender extends TensorRecommender {
                 } else {
                     //if ((0.0 < updateFeatureValue && updateFeatureValue < 1.7) || updateFeatureValue > 4.0)
                     //if ( updateFeatureValue > 3.0)
-                        //featureTable.put(helpedIdx, featureIdx, updateFeatureValue);
+                        featureTable.put(helpedIdx, featureIdx, updateFeatureValue);
                     //featureTable.put(helpedIdx, featureIdx, 3.0);
                 }
             }
@@ -570,6 +575,7 @@ public class EfmRecommender extends TensorRecommender {
         //featureSentimemtPairsMappingData = DataFrame.getInnerMapping("sentiment").inverse();
         BiMap<Integer, String> userHelpPairsMappingData = DataFrame.getInnerMapping("help_user").inverse();
         BiMap<Integer, String> featureSentimentHelpPairsMappingData = DataFrame.getInnerMapping("help_sentiment").inverse();
+        //BiMap<Integer, String> userPairsMappingData = DataFrame.getInnerMapping("user").inverse();
 
         for (TensorEntry te : trainTensor) {
             int[] entryKeys = te.keys();
@@ -594,6 +600,7 @@ public class EfmRecommender extends TensorRecommender {
                 if (uHPList.length == 0 || uHPList[idx].isEmpty())
                     continue;
                 int userHelpIndex = Integer.parseInt(uHPList[idx]);
+                //userHelpIndex = userPairsMappingData.inverse().get(uHPList[idx]);
 
                 //add user help data if not in test data
                 if (testTensor.getIndices(userHelpIndex, itemIndex).isEmpty()) {
