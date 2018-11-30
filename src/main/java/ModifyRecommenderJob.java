@@ -73,6 +73,8 @@ public class ModifyRecommenderJob{
 
     private Recommender subRecommender;
 
+    private DataModel alterDataModel;
+
     private HashMap<String, String> saveEvalMap;
 
     private StringBuilder saveEvalResultSb;
@@ -102,6 +104,8 @@ public class ModifyRecommenderJob{
     public void setRecommender(Recommender recommender) {
         this.subRecommender = recommender;
     }
+
+    public void setAlterDataModel (DataModel dataModel) { this.alterDataModel = dataModel; }
 
     public void setParameterSearch(parameter.gridSearch parameterSearch) {
         this.parameterSearch = parameterSearch;
@@ -189,7 +193,11 @@ public class ModifyRecommenderJob{
         //if (null == dataModel) {
         //    dataModel = ReflectionUtil.newInstance((Class<DataModel>) this.getDataModelClass(), conf);
         //}
-        dataModel = ReflectionUtil.newInstance((Class<DataModel>) this.getDataModelClass(), conf);
+        if (conf.get("data.model.format").isEmpty()) {
+            dataModel = alterDataModel;
+        } else {
+            dataModel = ReflectionUtil.newInstance((Class<DataModel>) this.getDataModelClass(), conf);
+        }
         dataModel.buildDataModel();
     }
 
@@ -420,7 +428,7 @@ public class ModifyRecommenderJob{
 
     public void saveEvalResult() {
         String resultData = saveEvalResultSb.toString();
-        String outputPath = conf.get("dfs.data.dir") + "/" + conf.get("data.input.path") + "/" + conf.get("data.output.path");
+        String outputPath = conf.get("dfs.data.dir") +  "/" + conf.get("data.output.path");
         try {
             FileUtil.writeString(outputPath, resultData);
         } catch (Exception e) {

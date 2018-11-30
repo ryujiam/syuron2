@@ -1,30 +1,33 @@
 import net.librec.common.LibrecException;
 import net.librec.conf.Configuration;
-import net.librec.job.RecommenderJob;
-import net.librec.recommender.cf.ranking.BPRRecommender;
 import parameter.gridSearch;
+import recommend.CMFRecommender;
 import recommend.EfmRecommender;
+import validation.validArffDataModel;
+import validation.validKCVDataSplitter;
 
 import java.io.IOException;
 import java.util.Arrays;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        testRecommender();
+        //testRecommender();
+        testValidRecommender();
         //gridtest();
 
     }
 
     public static void testRecommender() throws ClassNotFoundException, LibrecException, IOException {
         Configuration conf = new Configuration();
-        Configuration.Resource resource = new Configuration.Resource("efm-test.properties");
+        //Configuration.Resource resource = new Configuration.Resource("efm-test.properties");
         //Configuration.Resource paraResource = new Configuration.Resource("big_dvd/efm-dvd-parameter.properties");
-        Configuration.Resource paraResource = new Configuration.Resource("efm/efm-rating.properties");
-        conf.addResource(resource);
+        Configuration.Resource paraResource = new Configuration.Resource("cmf/cmf-rating.properties");
+        //Configuration.Resource paraResource = new Configuration.Resource("cmf/cmf-rating.properties");
+        //conf.addResource(resource);
         conf.addResource(paraResource);
         gridSearch grid = new gridSearch();
-        EfmRecommender recommender = new EfmRecommender();
-        //BPRRecommender recommender = new BPRRecommender();
+        CMFRecommender recommender = new CMFRecommender();
+        //EfmRecommender recommender = new EfmRecommender();
         ModifyRecommenderJob job = new ModifyRecommenderJob(conf);
         job.setParameterSearch(grid);
         job.setRecommender(recommender);
@@ -40,5 +43,23 @@ public class Main {
         while (grid.schedule()) {
             System.out.println(Arrays.toString(grid.getParameterValues()));
         }
+    }
+
+    public static void testValidRecommender() throws ClassNotFoundException, LibrecException, IOException {
+        Configuration conf = new Configuration();
+        Configuration.Resource paraResource = new Configuration.Resource("cmf/sample.properties");
+        conf.addResource(paraResource);
+        gridSearch grid = new gridSearch();
+        CMFRecommender recommender = new CMFRecommender();
+        validKCVDataSplitter dataSplitter = new validKCVDataSplitter(conf);
+        validArffDataModel dataModel = new validArffDataModel(conf);
+        dataModel.setDatasplitter(dataSplitter);
+        ModifyRecommenderJob job = new ModifyRecommenderJob(conf);
+        job.setParameterSearch(grid);
+        job.setAlterDataModel(dataModel);
+        job.setRecommender(recommender);
+        job.runJob();
+
+
     }
 }
