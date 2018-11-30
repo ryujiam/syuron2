@@ -21,6 +21,7 @@ public class validKCVDataSplitter extends RatioDataSplitter {
     protected SequentialAccessSparseMatrix validPreferenceMatrix;
     protected SequentialAccessSparseMatrix validAssignMatrix;
     protected LinkedList<SequentialAccessSparseMatrix> validAssignMatrixList;
+    protected LinkedList<SequentialAccessSparseMatrix> cloneValidAssignMatrixList;
     protected int cvNumver;
     protected int cvIndex;
     protected SequentialAccessSparseMatrix totalTestMatrix;
@@ -68,6 +69,9 @@ public class validKCVDataSplitter extends RatioDataSplitter {
             for (int i = 1; i < kFold + 1; i++) {
                 this.validAssignMatrixList.add(new SequentialAccessSparseMatrix(validAssignMatrix.rowSize(), validAssignMatrix.columnSize(), tableList.get(i)));
             }
+            if (cloneValidAssignMatrixList == null) {
+                cloneValidAssignMatrixList = (LinkedList<SequentialAccessSparseMatrix>) validAssignMatrixList.clone();
+            }
         }
 
     }
@@ -110,6 +114,7 @@ public class validKCVDataSplitter extends RatioDataSplitter {
                 testMatrix.reshape();
                 return true;
             } else {
+                validAssignMatrixList = (LinkedList<SequentialAccessSparseMatrix>) cloneValidAssignMatrixList.clone();
                 return false;
             }
         }
