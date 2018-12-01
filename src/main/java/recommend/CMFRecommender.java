@@ -122,6 +122,7 @@ public class CMFRecommender extends TensorRecommender{
 
     @Override
     protected void trainModel() throws LibrecException{
+        double tradeOff = conf.getDouble("rec.tradeoff", 1.0);
         for (int iter = 1; iter <= numIterations; iter++) {
             loss = 0.0d;
 
@@ -155,7 +156,8 @@ public class CMFRecommender extends TensorRecommender{
                             double estmSideRatingValue = factorSidesVector.dot(sidePredictsVector);
 
                             userFactors.set(factorIdx, userIdx, userFactors.get(factorIdx, userIdx)
-                                    * ((realRatingValue + realSideRatingValue) / (estmRatingValue + estmSideRatingValue))
+                                    * (((tradeOff) * realRatingValue + (1.0 - tradeOff) * realSideRatingValue) /
+                                    ((tradeOff) * estmRatingValue + (1.0 - tradeOff) * estmSideRatingValue))
                             );
                         }
                     }
@@ -179,7 +181,7 @@ public class CMFRecommender extends TensorRecommender{
                             double estmSideRatingValue = factorUsersVector.dot(userSidePredictsVector) + 1e-9;
 
                             sideFactors.set(factorIdx, sideIdx, sideFactors.get(factorIdx, sideIdx)
-                                    * (realSideRatingValue / estmSideRatingValue)
+                                    * (((1.0 - tradeOff) * realSideRatingValue) / ((1.0 - tradeOff) * estmSideRatingValue))
                             );
                         }
                     }
@@ -201,7 +203,7 @@ public class CMFRecommender extends TensorRecommender{
                             double estmValue = factorUsersVector.dot(userPredictsVector) + 1e-9;
 
                             itemFactors.set(factorIdx, itemIdx, itemFactors.get(factorIdx, itemIdx)
-                                    * (realValue / estmValue)
+                                    * ((tradeOff * realValue) / (tradeOff * estmValue))
                             );
                         }
                     }
