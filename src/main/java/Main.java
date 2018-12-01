@@ -47,11 +47,11 @@ public class Main {
 
     public static void testValidRecommender() throws ClassNotFoundException, LibrecException, IOException {
         Configuration conf = new Configuration();
-        Configuration.Resource paraResource = new Configuration.Resource("efm/efm-ranking.properties");
+        Configuration.Resource paraResource = new Configuration.Resource("cmf/cmf-ranking.properties");
         conf.addResource(paraResource);
         gridSearch grid = new gridSearch();
-        //CMFRecommender recommender = new CMFRecommender();
-        EfmRecommender recommender = new EfmRecommender();
+        CMFRecommender recommender = new CMFRecommender();
+        //EfmRecommender recommender = new EfmRecommender();
         validKCVDataSplitter dataSplitter = new validKCVDataSplitter(conf);
         validArffDataModel dataModel = new validArffDataModel(conf);
         dataModel.setDatasplitter(dataSplitter);

@@ -81,6 +81,14 @@ public class validKCVDataSplitter extends RatioDataSplitter {
         if (this.validAssignMatrixList == null) {
             validAssignMatrixList = new LinkedList<>();
             return true;
+        } else if (conf.get("data.split.valid").equals("test")) {
+            if (assignMatrixList == null) {
+                assignMatrixList = new LinkedList<>();
+                return true;
+            } else {
+                assignMatrixList = null;
+                return false;
+            }
         } else {
             if (validAssignMatrixList.size() > 0) {
                 SequentialAccessSparseMatrix validAssign = validAssignMatrixList.poll();
@@ -112,6 +120,7 @@ public class validKCVDataSplitter extends RatioDataSplitter {
                         assignMatrixList = new LinkedList<>();
                         return true;
                     } else {
+                        assignMatrixList = new LinkedList<>();
                         return false;
                     }
                 }
