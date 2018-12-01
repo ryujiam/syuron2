@@ -76,6 +76,12 @@ public class validArffDataModel extends ArffDataModel implements DataModel{
             }
             totalTrainDataSet = totalTrainTensor;
             totalTestDataSet = totalTestTensor;
+            if (conf.get("data.split.valid").equals("valid")) {
+                validAmendSplitter();
+            } else if (conf.get("data.split.valid").equals("test")) {
+                trainDataSet = totalTrainTensor;
+                testDataSet = totalTestTensor;
+            }
         }
     }
 
@@ -106,18 +112,13 @@ public class validArffDataModel extends ArffDataModel implements DataModel{
             }
         }
         trainDataSet = trainTensor;
-        if (conf.get("data.split.valid").equals("valid")) {
-           testDataSet = testTensor;
-        } else if (conf.get("data.split.valid").equals("test")) {
-            testDataSet = totalTestDataSet;
-        }
+        testDataSet = testTensor;
         LOG.info("Data cardinality of validation training is " + trainDataSet.size());
         LOG.info("Data cardinality of validation testing is " + testDataSet.size());
     }
     @Override
     public void nextFold(){
         amendSplitter();
-        validAmendSplitter();
     }
 
     public void setDatasplitter(DataSplitter dataSplitter) {this.dataSplitter = dataSplitter; }

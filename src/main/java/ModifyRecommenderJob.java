@@ -10,6 +10,8 @@ import net.librec.recommender.RecommenderContext;
 import net.librec.recommender.item.RecommendedItem;
 import net.librec.util.JobUtil;
 import net.librec.util.ReflectionUtil;
+import validation.validKCVDataSplitter;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -154,7 +156,8 @@ public class ModifyRecommenderJob{
         parameterSearch.setup();
 
         while (parameterSearch.schedule()) {
-            Randoms.seed(1);
+            //data set random seed
+            Randoms.seed(conf.getLong("data.random.seed", 1L));
             generateDataModel();
             cvEvalResults = new HashMap<>();
             Randoms.seed(conf.getLong("rec.random.seed", 1L));
@@ -372,7 +375,7 @@ public class ModifyRecommenderJob{
      */
     private void printCVAverageResult() {
         DataSplitter splitter = dataModel.getDataSplitter();
-        if (splitter != null && (splitter instanceof KCVDataSplitter || splitter instanceof LOOCVDataSplitter)) {
+        if (splitter != null && (splitter instanceof KCVDataSplitter || splitter instanceof LOOCVDataSplitter || splitter instanceof validKCVDataSplitter)) {
             LOG.info("Average Evaluation Result of Cross Validation:");
             for (Map.Entry<String, List<Double>> entry : cvEvalResults.entrySet()) {
                 String evalName = entry.getKey();
@@ -428,7 +431,14 @@ public class ModifyRecommenderJob{
 
     public void saveEvalResult() {
         String resultData = saveEvalResultSb.toString();
-        String outputPath = conf.get("dfs.data.dir") +  "/" + conf.get("data.output.path");
+        String outputPath = conf.get("dfs.data.dir") + "/output";
+        if (conf.get("data.model.format").isEmpty() && conf.get("data.split.valid").equals("valid")) {
+             outputPath += "/valid" + "/" + conf.get("data.output.path");
+        } else if (conf.get("data.model.format").isEmpty() && conf.get("data.split.valid").equals("test")) {
+            outputPath +=  "/valid/output" + "/" + conf.get("data.output.path");
+        } else {
+            outputPath += "/" + conf.get("data.output.path");
+        }
         try {
             FileUtil.writeString(outputPath, resultData);
         } catch (Exception e) {
@@ -444,7 +454,7 @@ public class ModifyRecommenderJob{
      */
     private void collectCVResults(String evalName, Double evalValue) {
         DataSplitter splitter = dataModel.getDataSplitter();
-        if (splitter != null && (splitter instanceof KCVDataSplitter || splitter instanceof LOOCVDataSplitter)) {
+        if (splitter != null && (splitter instanceof KCVDataSplitter || splitter instanceof LOOCVDataSplitter || splitter instanceof validKCVDataSplitter)) {
             if (cvEvalResults.containsKey(evalName)) {
                 cvEvalResults.get(evalName).add(evalValue);
             } else {

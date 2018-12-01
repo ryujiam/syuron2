@@ -101,13 +101,18 @@ public class validKCVDataSplitter extends RatioDataSplitter {
                     }
 
                 } else if (conf.get("data.split.valid").equals("test")) {
-                    SequentialAccessSparseMatrix assign = assignMatrixList.poll();
-                    testMatrix = preferenceMatrix.clone();
+                    //SequentialAccessSparseMatrix assign = assignMatrixList.poll();
+                    //testMatrix = preferenceMatrix.clone();
 
-                    for (MatrixEntry matrixEntry : preferenceMatrix) {
-                       if (assign.get(matrixEntry.row(), matrixEntry.column()) != 1) {
-                           testMatrix.setAtColumnPosition(matrixEntry.row(), matrixEntry.columnPosition(), 0.0D);
-                       }
+                    //for (MatrixEntry matrixEntry : preferenceMatrix) {
+                     //  if (assign.get(matrixEntry.row(), matrixEntry.column()) != 1) {
+                      //     testMatrix.setAtColumnPosition(matrixEntry.row(), matrixEntry.columnPosition(), 0.0D);
+                       //}
+                    if (assignMatrixList == null) {
+                        assignMatrixList = new LinkedList<>();
+                        return true;
+                    } else {
+                        return false;
                     }
                 }
                 trainMatrix.reshape();

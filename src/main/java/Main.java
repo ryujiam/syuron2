@@ -21,13 +21,13 @@ public class Main {
         Configuration conf = new Configuration();
         //Configuration.Resource resource = new Configuration.Resource("efm-test.properties");
         //Configuration.Resource paraResource = new Configuration.Resource("big_dvd/efm-dvd-parameter.properties");
-        Configuration.Resource paraResource = new Configuration.Resource("cmf/cmf-rating.properties");
+        Configuration.Resource paraResource = new Configuration.Resource("efm/efm-ranking.properties");
         //Configuration.Resource paraResource = new Configuration.Resource("cmf/cmf-rating.properties");
         //conf.addResource(resource);
         conf.addResource(paraResource);
         gridSearch grid = new gridSearch();
-        CMFRecommender recommender = new CMFRecommender();
-        //EfmRecommender recommender = new EfmRecommender();
+        //CMFRecommender recommender = new CMFRecommender();
+        EfmRecommender recommender = new EfmRecommender();
         ModifyRecommenderJob job = new ModifyRecommenderJob(conf);
         job.setParameterSearch(grid);
         job.setRecommender(recommender);
@@ -47,10 +47,11 @@ public class Main {
 
     public static void testValidRecommender() throws ClassNotFoundException, LibrecException, IOException {
         Configuration conf = new Configuration();
-        Configuration.Resource paraResource = new Configuration.Resource("cmf/sample.properties");
+        Configuration.Resource paraResource = new Configuration.Resource("efm/efm-ranking.properties");
         conf.addResource(paraResource);
         gridSearch grid = new gridSearch();
-        CMFRecommender recommender = new CMFRecommender();
+        //CMFRecommender recommender = new CMFRecommender();
+        EfmRecommender recommender = new EfmRecommender();
         validKCVDataSplitter dataSplitter = new validKCVDataSplitter(conf);
         validArffDataModel dataModel = new validArffDataModel(conf);
         dataModel.setDatasplitter(dataSplitter);
