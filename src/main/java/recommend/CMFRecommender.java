@@ -164,47 +164,51 @@ public class CMFRecommender extends TensorRecommender{
                 }
 
                 //update sideFactors
-                for (int sideIdx = 0; sideIdx < numberOfSides; sideIdx++) {
-                    SequentialSparseVector userSideRatingsVector = sideRatingMatrix.column(sideIdx);
-                    if (userSideRatingsVector.getNumEntries() > 0) {
-                        VectorBasedDenseVector userSidePredictsVector = new VectorBasedDenseVector(numUsers);
+                if (tradeOff < 1.0) {
+                    for (int sideIdx = 0; sideIdx < numberOfSides; sideIdx++) {
+                        SequentialSparseVector userSideRatingsVector = sideRatingMatrix.column(sideIdx);
+                        if (userSideRatingsVector.getNumEntries() > 0) {
+                            VectorBasedDenseVector userSidePredictsVector = new VectorBasedDenseVector(numUsers);
 
-                        for (int i = 0; i < userSideRatingsVector.getNumEntries(); i++) {
-                            int userIdx = userSideRatingsVector.getIndexAtPosition(i);
-                            userSidePredictsVector.set(userIdx, predSideRating(userIdx, sideIdx));
-                        }
+                            for (int i = 0; i < userSideRatingsVector.getNumEntries(); i++) {
+                                int userIdx = userSideRatingsVector.getIndexAtPosition(i);
+                                userSidePredictsVector.set(userIdx, predSideRating(userIdx, sideIdx));
+                            }
 
-                        for (int factorIdx = 0; factorIdx < numFactors; factorIdx++) {
-                            VectorBasedDenseVector factorUsersVector = (VectorBasedDenseVector) userFactors.row(factorIdx);
+                            for (int factorIdx = 0; factorIdx < numFactors; factorIdx++) {
+                                VectorBasedDenseVector factorUsersVector = (VectorBasedDenseVector) userFactors.row(factorIdx);
 
-                            double realSideRatingValue = factorUsersVector.dot(userSideRatingsVector);
-                            double estmSideRatingValue = factorUsersVector.dot(userSidePredictsVector) + 1e-9;
+                                double realSideRatingValue = factorUsersVector.dot(userSideRatingsVector);
+                                double estmSideRatingValue = factorUsersVector.dot(userSidePredictsVector) + 1e-9;
 
-                            sideFactors.set(factorIdx, sideIdx, sideFactors.get(factorIdx, sideIdx)
-                                    * (((1.0 - tradeOff) * realSideRatingValue) / ((1.0 - tradeOff) * estmSideRatingValue))
-                            );
+                                sideFactors.set(factorIdx, sideIdx, sideFactors.get(factorIdx, sideIdx)
+                                        * (((1.0 - tradeOff) * realSideRatingValue) / ((1.0 - tradeOff) * estmSideRatingValue))
+                                );
+                            }
                         }
                     }
                 }
 
-                for (int itemIdx = 0; itemIdx < numItems; itemIdx++) {
-                    SequentialSparseVector userRatingsVector = trainMatrix.column(itemIdx);
-                    if (userRatingsVector.getNumEntries() > 0) {
-                        VectorBasedDenseVector userPredictsVector = new VectorBasedDenseVector(numUsers);
+                if (tradeOff > 0.0) {
+                    for (int itemIdx = 0; itemIdx < numItems; itemIdx++) {
+                        SequentialSparseVector userRatingsVector = trainMatrix.column(itemIdx);
+                        if (userRatingsVector.getNumEntries() > 0) {
+                            VectorBasedDenseVector userPredictsVector = new VectorBasedDenseVector(numUsers);
 
-                        for (int i = 0; i < userRatingsVector.getNumEntries(); i++) {
-                            int userIdx = userRatingsVector.getIndexAtPosition(i);
-                            userPredictsVector.set(userIdx, predict(userIdx, itemIdx));
-                        }
+                            for (int i = 0; i < userRatingsVector.getNumEntries(); i++) {
+                                int userIdx = userRatingsVector.getIndexAtPosition(i);
+                                userPredictsVector.set(userIdx, predict(userIdx, itemIdx));
+                            }
 
-                        for (int factorIdx = 0; factorIdx < numFactors; factorIdx++) {
-                            VectorBasedDenseVector factorUsersVector = (VectorBasedDenseVector) userFactors.row(factorIdx);
-                            double realValue = factorUsersVector.dot(userRatingsVector);
-                            double estmValue = factorUsersVector.dot(userPredictsVector) + 1e-9;
+                            for (int factorIdx = 0; factorIdx < numFactors; factorIdx++) {
+                                VectorBasedDenseVector factorUsersVector = (VectorBasedDenseVector) userFactors.row(factorIdx);
+                                double realValue = factorUsersVector.dot(userRatingsVector);
+                                double estmValue = factorUsersVector.dot(userPredictsVector) + 1e-9;
 
-                            itemFactors.set(factorIdx, itemIdx, itemFactors.get(factorIdx, itemIdx)
-                                    * ((tradeOff * realValue) / (tradeOff * estmValue))
-                            );
+                                itemFactors.set(factorIdx, itemIdx, itemFactors.get(factorIdx, itemIdx)
+                                        * ((tradeOff * realValue) / (tradeOff * estmValue))
+                                );
+                            }
                         }
                     }
                 }
