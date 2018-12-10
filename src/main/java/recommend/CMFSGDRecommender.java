@@ -32,7 +32,6 @@ public class CMFSGDRecommender extends CMFRecommender{
         batchSize = conf.getInt("rec.sgd.batchSize", 100);
         epsilon = conf.getDouble("rec.sgd.epsilon", 1e-8);
         eta = conf.getDouble("rec.sgd.eta", 1.0);
-        double tradeoff = conf.getDouble("rec.tradeoff", 1.0);
         double[][] userFactorsLearnRate = new double[numFactors][numUsers];
         double[][] itemFactorsLearnRate = new double[numFactors][numItems];
         double[][] sideFactorsLearnRate = new double[numFactors][numberOfSides];
@@ -147,7 +146,7 @@ public class CMFSGDRecommender extends CMFRecommender{
                             MatrixBasedDenseVector factorUsersVector = (MatrixBasedDenseVector) batchUserFactors.column(factorIdx);
                             double realRatingValue = factorUsersVector.dot(userRatingsVector);
                             double estmRatingValue = factorUsersVector.dot(userPredictsVector);
-                            double error = realRatingValue - estmRatingValue;
+                            double error = tradeOff * (realRatingValue - estmRatingValue);
                             //Adagrad
                             itemFactorsLearnRate[factorIdx][itemIdx] += error * error;
                             double del = adagrad(itemFactorsLearnRate[factorIdx][itemIdx], error, batchUsersSet.size());
@@ -186,7 +185,7 @@ public class CMFSGDRecommender extends CMFRecommender{
                             MatrixBasedDenseVector factorSideUsersVector = (MatrixBasedDenseVector) batchUserFactors.column(factorIdx);
                             double realSideRatingValue = factorSideUsersVector.dot(userSideRatingsVector);
                             double estmSideRatingValue = factorSideUsersVector.dot(userSidePredictsVector);
-                            double error = realSideRatingValue - estmSideRatingValue;
+                            double error = (1.0 - tradeOff) * (realSideRatingValue - estmSideRatingValue);
                             sideFactorsLearnRate[factorIdx][sideIdx] += error * error;
                             double del = adagrad(sideFactorsLearnRate[factorIdx][sideIdx], error, ((Set<Integer>) infoUsers.getValue()).size());
                             //sideFactors.plus(factorIdx, sideIdx,
