@@ -7,6 +7,7 @@ import net.librec.math.algorithm.Maths;
 import net.librec.math.algorithm.Randoms;
 import net.librec.math.structure.*;
 import net.librec.util.ArrayUtils;
+import org.omg.CORBA.INTERNAL;
 
 import java.lang.reflect.Array;
 import java.util.*;
@@ -48,8 +49,9 @@ public class CMFSGDRecommender extends CMFRecommender{
                     //update itemFactors
                     //randomly draw batch size (userIdx, itemIdx)
                     int userItemSample = 0;
-                    Map<Integer, Set<Integer>> batchUserItemsSet = new HashMap<>();
-                    Map<Integer, Set<Integer>> batchItemUsersSet = new HashMap<>();
+                    Map<Integer, Set<Integer>> batchUserItemsSet = new HashMap<>(numUsers * 4/3 + 1);
+                    Map<Integer, Set<Integer>> batchItemUsersSet = new HashMap<>(numItems * 4/3 + 1);
+                    Set<Integer> batchUsersUnion = new HashSet<>(numUsers);
 
                     while (userItemSample < batchSize) {
                         int userIdx = Randoms.uniform(numUsers);
@@ -78,6 +80,7 @@ public class CMFSGDRecommender extends CMFRecommender{
                             Set<Integer> batchUsersSet = batchItemUsersSet.get(itemIdx);
                             batchUsersSet.add(userIdx);
                         }
+                        batchUsersUnion.add(userIdx);
                         userItemSample++;
                     }
 
@@ -113,105 +116,153 @@ public class CMFSGDRecommender extends CMFRecommender{
                             Set<Integer> batchUsersSet = batchInfoUsersSet.get(infoIdx);
                             batchUsersSet.add(userSideIdx);
                         }
+                        batchUsersUnion.add(userSideIdx);
                         userSideInfoSample++;
                     }
 
                     //update itemFactors by mini batch sgd
-                    for (int itemIdx = 0; itemIdx < numItems; itemIdx++) {
-                        if (batchItemUsersSet.containsKey(itemIdx)) {
-                            Set<Integer> batchUsersSet = batchItemUsersSet.get(itemIdx);
-                            VectorBasedDenseVector userRatingsVector = new VectorBasedDenseVector(numUsers);
-                            VectorBasedDenseVector userPredictsVector = new VectorBasedDenseVector(numUsers);
+                    for (Map.Entry itemUsers : batchItemUsersSet.entrySet()) {
+                        int itemIdx = (Integer) itemUsers.getKey();
+                        Set<Integer> batchUsersSet = batchItemUsersSet.get(itemIdx);
+                        VectorBasedDenseVector userRatingsVector = new VectorBasedDenseVector(batchUsersSet.size());
+                        VectorBasedDenseVector userPredictsVector = new VectorBasedDenseVector(batchUsersSet.size());
+                        DenseMatrix batchUserFactors = new DenseMatrix(batchUsersSet.size(), numFactors);
 
-                            for (Integer userIdx : batchUsersSet) {
-                                userRatingsVector.set(userIdx, trainMatrix.get(userIdx, itemIdx));
-                                userPredictsVector.set(userIdx, predict(userIdx, itemIdx));
-                                double lossError = (trainMatrix.get(userIdx, itemIdx) - predict(userIdx, itemIdx));
-                                loss += lossError * lossError;
-                            }
+                        //for (Integer userIdx : batchUsersSet) {
+                        int index = 0;
+                        for (Integer userIdx : (Set<Integer>) itemUsers.getValue()) {
+                            //userRatingsVector.set(userIdx, trainMatrix.get(userIdx, itemIdx));
+                            //userPredictsVector.set(userIdx, predict(userIdx, itemIdx));
+                            userRatingsVector.set(index, trainMatrix.get(userIdx, itemIdx));
+                            userPredictsVector.set(index, predict(userIdx, itemIdx));
 
-                            for (int factorIdx = 0; factorIdx < numFactors; factorIdx++) {
-                                VectorBasedDenseVector factorUsersVector = (VectorBasedDenseVector) userFactors.row(factorIdx);
-                                double realRatingValue = factorUsersVector.dot(userRatingsVector);
-                                double estmRatingValue = factorUsersVector.dot(userPredictsVector);
-                                double error = realRatingValue - estmRatingValue;
-                                //Adagrad
-                                itemFactorsLearnRate[factorIdx][itemIdx] += error * error;
-                                double del = adagrad(itemFactorsLearnRate[factorIdx][itemIdx], error, batchUsersSet.size());
-                                itemFactors.plus(factorIdx, itemIdx, del);
-                                if (itemFactors.get(factorIdx, itemIdx) < 0) {
-                                    itemFactors.set(factorIdx, itemIdx, 0.0);
-                                }
+                            batchUserFactors.set(index, userFactors.column(userIdx));
+                            double lossError = (trainMatrix.get(userIdx, itemIdx) - predict(userIdx, itemIdx));
+                            loss += lossError * lossError;
+                            index++;
+                        }
+
+                        for (int factorIdx = 0; factorIdx < numFactors; factorIdx++) {
+                            //VectorBasedDenseVector factorUsersVector = (VectorBasedDenseVector) userFactors.row(factorIdx);
+                            MatrixBasedDenseVector factorUsersVector = (MatrixBasedDenseVector) batchUserFactors.column(factorIdx);
+                            double realRatingValue = factorUsersVector.dot(userRatingsVector);
+                            double estmRatingValue = factorUsersVector.dot(userPredictsVector);
+                            double error = realRatingValue - estmRatingValue;
+                            //Adagrad
+                            itemFactorsLearnRate[factorIdx][itemIdx] += error * error;
+                            double del = adagrad(itemFactorsLearnRate[factorIdx][itemIdx], error, batchUsersSet.size());
+                            itemFactors.plus(factorIdx, itemIdx, del);
+                            if (itemFactors.get(factorIdx, itemIdx) < 0) {
+                                itemFactors.set(factorIdx, itemIdx, 0.0);
                             }
                         }
                     }
 
-                    for (int sideIdx = 0; sideIdx < numberOfSides; sideIdx++) {
-                        if (batchInfoUsersSet.containsKey(sideIdx)) {
-                            Set<Integer> batchUsersSet = batchInfoUsersSet.get(sideIdx);
-                            VectorBasedDenseVector userSideRatingsVector = new VectorBasedDenseVector(numUsers);
-                            VectorBasedDenseVector userSidePredictsVector = new VectorBasedDenseVector(numUsers);
 
-                            for (Integer userIdx : batchUsersSet) {
-                                userSideRatingsVector.set(userIdx, sideRatingMatrix.get(userIdx, sideIdx));
-                                userSidePredictsVector.set(userIdx, predSideRating(userIdx, sideIdx));
-                                double lossError = (sideRatingMatrix.get(userIdx, sideIdx) - predSideRating(userIdx, sideIdx));
-                                loss += lossError * lossError;
-                            }
 
-                            for (int factorIdx = 0; factorIdx < numFactors; factorIdx++) {
-                                VectorBasedDenseVector factorSideUsersVector = (VectorBasedDenseVector) userFactors.row(factorIdx);
-                                double realSideRatingValue = factorSideUsersVector.dot(userSideRatingsVector);
-                                double estmSideRatingValue = factorSideUsersVector.dot(userSidePredictsVector);
-                                double error = realSideRatingValue - estmSideRatingValue;
-                                sideFactorsLearnRate[factorIdx][sideIdx] += error * error;
-                                double del = adagrad(sideFactorsLearnRate[factorIdx][sideIdx], error, batchUsersSet.size());
-                                //sideFactors.plus(factorIdx, sideIdx,
-                                //        (eta / (Math.sqrt(sideFactorsLearnRate[factorIdx][sideIdx]) + epsilon)) * error / (double) batchSize
-                                //);
-                                sideFactors.plus(factorIdx, sideIdx, del);
-                                if (sideFactors.get(factorIdx, sideIdx) < 0) {
-                                    sideFactors.set(factorIdx, sideIdx, 0.0);
-                                }
+                    //for (int sideIdx = 0; sideIdx < numberOfSides; sideIdx++) {
+                    for (Map.Entry infoUsers : batchInfoUsersSet.entrySet()) {
+                        int sideIdx = (Integer) infoUsers.getKey();
+                        int infoUsersSize = ((Set<Integer>) infoUsers.getValue()).size();
+                        VectorBasedDenseVector userSideRatingsVector = new VectorBasedDenseVector(infoUsersSize);
+                        VectorBasedDenseVector userSidePredictsVector = new VectorBasedDenseVector(infoUsersSize);
+                        DenseMatrix batchUserFactors = new DenseMatrix(infoUsersSize, numFactors);
 
-                            }
+                        //for (Integer userIdx : batchUsersSet) {
+                        int index = 0;
+                        for (Integer userIdx : (Set<Integer>) infoUsers.getValue()) {
+                            //userSideRatingsVector.set(userIdx, sideRatingMatrix.get(userIdx, sideIdx));
+                            //userSidePredictsVector.set(userIdx, predSideRating(userIdx, sideIdx));
+                            userSideRatingsVector.set(index, sideRatingMatrix.get(userIdx, sideIdx));
+                            userSidePredictsVector.set(index, predSideRating(userIdx, sideIdx));
+                            batchUserFactors.set(index, userFactors.column(userIdx));
+                            double lossError = (sideRatingMatrix.get(userIdx, sideIdx) - predSideRating(userIdx, sideIdx));
+                            loss += lossError * lossError;
+                            index++;
                         }
+
+                        for (int factorIdx = 0; factorIdx < numFactors; factorIdx++) {
+                            //VectorBasedDenseVector factorSideUsersVector = (VectorBasedDenseVector) userFactors.row(factorIdx);
+                            MatrixBasedDenseVector factorSideUsersVector = (MatrixBasedDenseVector) batchUserFactors.column(factorIdx);
+                            double realSideRatingValue = factorSideUsersVector.dot(userSideRatingsVector);
+                            double estmSideRatingValue = factorSideUsersVector.dot(userSidePredictsVector);
+                            double error = realSideRatingValue - estmSideRatingValue;
+                            sideFactorsLearnRate[factorIdx][sideIdx] += error * error;
+                            double del = adagrad(sideFactorsLearnRate[factorIdx][sideIdx], error, ((Set<Integer>) infoUsers.getValue()).size());
+                            //sideFactors.plus(factorIdx, sideIdx,
+                            //        (eta / (Math.sqrt(sideFactorsLearnRate[factorIdx][sideIdx]) + epsilon)) * error / (double) batchSize
+                            //);
+                            sideFactors.plus(factorIdx, sideIdx, del);
+                            if (sideFactors.get(factorIdx, sideIdx) < 0) {
+                                sideFactors.set(factorIdx, sideIdx, 0.0);
+                            }
+
+                        }
+
                     }
 
-                    for (int userIdx = 0; userIdx < numUsers; userIdx++) {
-                        if (batchUserItemsSet.containsKey(userIdx) || batchUserInfosSet.containsKey(userIdx)) {
+                    for (Integer userIdx : batchUsersUnion) {
                             Set<Integer> batchItemsSet = new HashSet<>();
                             Set<Integer> batchInfosSet = new HashSet<>();
-                            VectorBasedDenseVector itemRatingsVector = new VectorBasedDenseVector(numItems);
-                            VectorBasedDenseVector itemPredictsVector = new VectorBasedDenseVector(numItems);
-                            VectorBasedDenseVector infoSideRatingsVector = new VectorBasedDenseVector(numberOfSides);
-                            VectorBasedDenseVector infoSidePredictsVector = new VectorBasedDenseVector(numberOfSides);
+                            VectorBasedDenseVector itemRatingsVector;
+                            VectorBasedDenseVector itemPredictsVector;
+                            VectorBasedDenseVector infoSideRatingsVector;
+                            VectorBasedDenseVector infoSidePredictsVector;
+                            DenseMatrix batchItemFactors, batchInfoFactors;
                             if (batchUserItemsSet.containsKey(userIdx)) {
                                 batchItemsSet = batchUserItemsSet.get(userIdx);
+                                itemRatingsVector = new VectorBasedDenseVector(batchItemsSet.size());
+                                itemPredictsVector = new VectorBasedDenseVector(batchItemsSet.size());
+                                batchItemFactors = new DenseMatrix(batchItemsSet.size(), numFactors);
+
+                                int index = 0;
                                 for (Integer itemIdx : batchItemsSet) {
-                                    itemRatingsVector.set(itemIdx, trainMatrix.get(userIdx, itemIdx));
-                                    itemPredictsVector.set(itemIdx, predict(userIdx, itemIdx));
+                                    //itemRatingsVector.set(itemIdx, trainMatrix.get(userIdx, itemIdx));
+                                    //itemPredictsVector.set(itemIdx, predict(userIdx, itemIdx));
+                                    itemRatingsVector.set(index, trainMatrix.get(userIdx, itemIdx));
+                                    itemPredictsVector.set(index, predict(userIdx, itemIdx));
+                                    batchItemFactors.set(index, itemFactors.column(itemIdx));
                                     double lossError = trainMatrix.get(userIdx, itemIdx) - predict(userIdx, itemIdx);
                                     loss += lossError * lossError;
+                                    index++;
                                 }
+                            } else {
+                                itemRatingsVector = new VectorBasedDenseVector(0);
+                                itemPredictsVector = new VectorBasedDenseVector(0);
+                                batchItemFactors = new DenseMatrix(0,0);
                             }
                             if (batchUserInfosSet.containsKey(userIdx)) {
                                 batchInfosSet = batchUserInfosSet.get(userIdx);
+                                infoSideRatingsVector = new VectorBasedDenseVector(batchInfosSet.size());
+                                infoSidePredictsVector = new VectorBasedDenseVector(batchInfosSet.size());
+                                batchInfoFactors = new DenseMatrix(batchInfosSet.size(), numFactors);
+
+                                int index = 0;
                                 for (Integer infoIdx : batchInfosSet) {
-                                    infoSideRatingsVector.set(infoIdx, sideRatingMatrix.get(userIdx, infoIdx));
-                                    infoSidePredictsVector.set(infoIdx, predSideRating(userIdx, infoIdx));
+                                    //infoSideRatingsVector.set(infoIdx, sideRatingMatrix.get(userIdx, infoIdx));
+                                    //infoSidePredictsVector.set(infoIdx, predSideRating(userIdx, infoIdx));
+                                    infoSideRatingsVector.set(index, sideRatingMatrix.get(userIdx, infoIdx));
+                                    infoSidePredictsVector.set(index, predSideRating(userIdx, infoIdx));
+                                    batchInfoFactors.set(index, sideFactors.column(infoIdx));
                                     double lossError = sideRatingMatrix.get(userIdx, infoIdx) - predSideRating(userIdx, infoIdx);
                                     loss += lossError * lossError;
+                                    index++;
                                 }
+                            } else {
+                                infoSideRatingsVector = new VectorBasedDenseVector(0);
+                                infoSidePredictsVector = new VectorBasedDenseVector(0);
+                                batchInfoFactors = new DenseMatrix(0,0);
                             }
 
                             for (int factorIdx = 0; factorIdx < numFactors; factorIdx++) {
-                                VectorBasedDenseVector factorItemsVector = (VectorBasedDenseVector) itemFactors.row(factorIdx);
+                                //VectorBasedDenseVector factorItemsVector = (VectorBasedDenseVector) itemFactors.row(factorIdx);
+                                MatrixBasedDenseVector factorItemsVector = (MatrixBasedDenseVector) batchItemFactors.column(factorIdx);
                                 double realRatingValue = factorItemsVector.dot(itemRatingsVector);
                                 double estmRatingValue = factorItemsVector.dot(itemPredictsVector);
                                 double realError = tradeOff * (realRatingValue - estmRatingValue);
 
-                                VectorBasedDenseVector factorInfosVector = (VectorBasedDenseVector) sideFactors.row(factorIdx);
+                                //VectorBasedDenseVector factorInfosVector = (VectorBasedDenseVector) sideFactors.row(factorIdx);
+                                MatrixBasedDenseVector factorInfosVector = (MatrixBasedDenseVector) batchInfoFactors.column(factorIdx);
                                 double realSideRatingValue = factorInfosVector.dot(infoSideRatingsVector);
                                 double estmSideRatingValue = factorInfosVector.dot(infoSidePredictsVector);
                                 double sideError = (1.0 - tradeOff) * (realSideRatingValue - estmSideRatingValue);
@@ -223,7 +274,7 @@ public class CMFSGDRecommender extends CMFRecommender{
                                     userFactors.set(factorIdx, userIdx, 0.0);
                                 }
                             }
-                        }
+
                     }
                 }
 
