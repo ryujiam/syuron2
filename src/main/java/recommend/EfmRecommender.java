@@ -243,7 +243,6 @@ public class EfmRecommender extends TensorRecommender {
     protected void trainModel() throws LibrecException {
         for (int iter = 1; iter <= conf.getInt("rec.iterator.maximum"); iter++) {
             loss = 0.0;
-            updateProgress(0);
             // Update featureMatrix by fixing the others
             // LOG.info("iter:" + iter + ", Update featureMatrix");
             for(int featureIdx=0; featureIdx<numberOfFeatures; featureIdx++) {
@@ -273,7 +272,6 @@ public class EfmRecommender extends TensorRecommender {
                     }
                 }
             }
-            updateProgress(20);
 
 
             // Update UserFeatureMatrix by fixing the others
@@ -305,7 +303,6 @@ public class EfmRecommender extends TensorRecommender {
                     }
                 }
             }
-            updateProgress(40);
 
             // Update ItemFeatureMatrix by fixing the others
             // LOG.info("iter:" + iter + ", Update ItemFeatureMatrix");
@@ -337,7 +334,6 @@ public class EfmRecommender extends TensorRecommender {
                     }
                 }
             }
-            updateProgress(60);
 
             // Update UserHiddenMatrix by fixing the others
             // LOG.info("iter:" + iter + ", Update UserHiddenMatrix");
@@ -358,7 +354,6 @@ public class EfmRecommender extends TensorRecommender {
                     }
                 }
             }
-            updateProgress(90);
 
             // Update ItemHiddenMatrix by fixing the others
             // LOG.info("iter:" + iter + ", Update ItemHiddenMatrix");
@@ -379,7 +374,6 @@ public class EfmRecommender extends TensorRecommender {
                     }
                 }
             }
-            updateProgress(100);
 
             // Compute loss value
             for (MatrixEntry me: trainMatrix) {

@@ -6,6 +6,7 @@ import parameter.gridSearch;
 import recommend.CMFRecommender;
 import recommend.CMFSGDRecommender;
 import recommend.EfmRecommender;
+import recommend.EfmSGD;
 import validation.validArffDataModel;
 import validation.validKCVDataSplitter;
 
@@ -52,12 +53,15 @@ public class Main {
 
     public static void testValidRecommender() throws ClassNotFoundException, LibrecException, IOException {
         Configuration conf = new Configuration();
-        Configuration.Resource paraResource = new Configuration.Resource("cmf/cmf-rating.properties");
+        //Configuration.Resource paraResource = new Configuration.Resource("cmf/cmf-sgd-rating.properties");
+        //Configuration.Resource paraResource = new Configuration.Resource("cmf/cmf-sgd-rating.properties");
+        Configuration.Resource paraResource = new Configuration.Resource("efm/efm-sim-ranking.properties");
         conf.addResource(paraResource);
         gridSearch grid = new gridSearch();
         //CMFRecommender recommender = new CMFRecommender();
-        CMFSGDRecommender recommender = new CMFSGDRecommender();
-        //EfmRecommender recommender = new EfmRecommender();
+        //CMFSGDRecommender recommender = new CMFSGDRecommender();
+        EfmRecommender recommender = new EfmRecommender();
+        //EfmSGD recommender = new EfmSGD();
         validKCVDataSplitter dataSplitter = new validKCVDataSplitter(conf);
         validArffDataModel dataModel = new validArffDataModel(conf);
         dataModel.setDatasplitter(dataSplitter);
