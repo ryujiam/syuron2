@@ -7,11 +7,11 @@ import com.google.common.collect.Table;
 import net.librec.common.LibrecException;
 import net.librec.math.algorithm.Randoms;
 import net.librec.math.structure.*;
+import net.librec.math.structure.Vector;
 import net.librec.recommender.TensorRecommender;
 import org.apache.commons.lang.StringUtils;
 
 import java.util.*;
-import java.util.Vector;
 
 public class EfmSGD extends TensorRecommender{
     protected int numberOfFeatures;
@@ -39,7 +39,18 @@ public class EfmSGD extends TensorRecommender{
 
     public BiMap<Integer, String> featureSentimemtPairsMappingData;
 
+
+
+    protected ArrayList<Map<Integer, Double>> userFeatureValuesList;
+    protected DenseMatrix userFeatureValuesMatrix;
+    protected DenseMatrix recItemFeatureValuesMatrix;
+    protected boolean[] userFeatureValuesFlag;
+    protected boolean[] recItemFeatureValuesFlag;
+    protected ArrayList<VectorBasedDenseVector> userFeatureValuesVectorList;
+    protected ArrayList<VectorBasedDenseVector> recItemFeatureValuesVectorList;
+
     boolean doExplain;
+    boolean doRanking;
 
     /*
      * (non-Javadoc)
@@ -69,6 +80,29 @@ public class EfmSGD extends TensorRecommender{
         Map<Integer, String> itemFeatureDict = new HashMap<Integer, String>();
 
         numberOfFeatures = 0;
+        //set up ndcg////////////////////////////////////////
+        userFeatureValuesList= new ArrayList<>(numUsers);
+        //ArrayList initialize
+        for (int var = 0; var < numUsers; var++) {
+            userFeatureValuesList.add(var, null);
+        }
+        //featureValuesFlag initialize
+        userFeatureValuesFlag = new boolean[numUsers];
+        recItemFeatureValuesFlag = new boolean[numItems];
+        for (int var = 0; var < numUsers; var++) userFeatureValuesFlag[var] = false;
+        for (int var = 0; var < numItems; var++) recItemFeatureValuesFlag[var] = false;
+        //initialize featureValuesMatrix
+        userFeatureValuesMatrix = new DenseMatrix(numUsers, numberOfFeatures);
+        recItemFeatureValuesMatrix = new DenseMatrix(numItems, numberOfFeatures);
+        userFeatureValuesVectorList= new ArrayList<>(numUsers);
+        for (int var = 0; var < numUsers; var++) {
+            userFeatureValuesVectorList.add(var, null);
+        }
+        recItemFeatureValuesVectorList= new ArrayList<>(numItems);
+        for (int var = 0; var < numItems; var++) {
+            recItemFeatureValuesVectorList.add(var, null);
+        }
+        /////////////////////////////////////////////////////
 
         for (TensorEntry te : trainTensor) {
             int[] entryKeys = te.keys();
@@ -824,12 +858,18 @@ public class EfmSGD extends TensorRecommender{
     }
 
     protected double predict(int u, int j) {
-        double pred = userFeatureMatrix.row(u).dot(itemFeatureMatrix.row(j)) + userHiddenMatrix.row(u).dot(itemHiddenMatrix.row(j));
-        if (pred < minRate)
-            return minRate;
-        if (pred > maxRate)
-            return maxRate;
-        return pred;
+        doRanking = conf.getBoolean("rec.recommend.doRanking", false);
+        if (doRanking && isRanking) {
+            double pred = topKPredict(u,j);
+            return pred;
+        } else {
+            double pred = userFeatureMatrix.row(u).dot(itemFeatureMatrix.row(j)) + userHiddenMatrix.row(u).dot(itemHiddenMatrix.row(j));
+            if (pred < minRate)
+                return minRate;
+            if (pred > maxRate)
+                return maxRate;
+            return pred;
+        }
     }
 
     protected double predictWithoutBound(int u, int j) {
@@ -895,5 +935,122 @@ public class EfmSGD extends TensorRecommender{
         }
         return tempRowColumnsSet;
     }
+
+    protected static class Differential {
+        Map<Integer, Set<Integer>> batchSet;
+        VectorBasedDenseVector ratingsVector;
+        VectorBasedDenseVector predictsVector;
+        DenseMatrix batchMatrix;
+        int setSize;
+
+        public Differential(Map<Integer, Set<Integer>> batchSet) {
+            this.batchSet = batchSet;
+        }
+
+        public void calcSetUp(int keyIdx,  int numFactors) {
+            if (batchSet.containsKey(keyIdx)) {
+                setSize = batchSet.get(keyIdx).size();
+                ratingsVector = new VectorBasedDenseVector(setSize);
+                predictsVector = new VectorBasedDenseVector(setSize);
+                batchMatrix = new DenseMatrix(setSize, numFactors);
+            } else {
+                ratingsVector = new VectorBasedDenseVector(0);
+                predictsVector = new VectorBasedDenseVector(0);
+                batchMatrix = new DenseMatrix(0,0);
+            }
+        }
+
+        public void setValue(int idx, double ratingValue, double predictValue, DenseVector batchVector) {
+           ratingsVector.set(idx, ratingValue);
+           predictsVector.set(idx, predictValue);
+           batchMatrix.set(idx, batchVector);
+        }
+
+        public DenseMatrix getBatchMatrix() {
+            return batchMatrix;
+        }
+
+        double realRatingValue(Vector dotVector) {
+            return ratingsVector.dot(dotVector);
+        }
+
+        double estmRatingValue(Vector dotVector) {
+            return predictsVector.dot(dotVector);
+        }
+    }
+
+    protected double topKPredict(int u, int j) {
+        double tradeoff = conf.getDouble("rec.tradeoff", 0.0);
+        double pred = (1.0 - tradeoff) * predictWithoutBound(u, j);
+
+        double[] userFeatureValues = new double[numberOfFeatures];
+        double[] recItemFeatureValues = new double[numberOfFeatures];
+        /**
+         if (userFeatureValuesFlag[u] == false) {
+         userFeatureValuesFlag[u] = true;
+         userFeatureValues = featureMatrix.times(userFeatureMatrix.row(u)).getValues();
+         userFeatureValuesMatrix.set(u, new VectorBasedDenseVector(userFeatureValues));
+         } else {
+         userFeatureValues = userFeatureValuesMatrix.row(u).getValues();
+         }
+
+         if (recItemFeatureValuesFlag[j] == false) {
+         recItemFeatureValuesFlag[j] = true;
+         recItemFeatureValues = featureMatrix.times(itemFeatureMatrix.row(j)).getValues();
+         recItemFeatureValuesMatrix.set(j, new VectorBasedDenseVector(recItemFeatureValues));
+         } else {
+         recItemFeatureValues = recItemFeatureValuesMatrix.row(j).getValues();
+         }
+         **/
+        if (userFeatureValuesVectorList.get(u) == null) {
+            userFeatureValues = featureMatrix.times(userFeatureMatrix.row(u)).getValues();
+            VectorBasedDenseVector userFeatureValuesVector = new VectorBasedDenseVector(userFeatureValues);
+            userFeatureValuesVectorList.set(u, userFeatureValuesVector);
+        } else {
+            userFeatureValues = userFeatureValuesVectorList.get(u).getValues();
+        }
+        if (recItemFeatureValuesVectorList.get(j) == null) {
+            recItemFeatureValues = featureMatrix.times(itemFeatureMatrix.row(j)).getValues();
+            VectorBasedDenseVector recItemFeatureValuesVector = new VectorBasedDenseVector(recItemFeatureValues);
+            recItemFeatureValuesVectorList.set(j, recItemFeatureValuesVector);
+        } else {
+            recItemFeatureValues = recItemFeatureValuesVectorList.get(j).getValues();
+
+        }
+
+        //userFeatureValues = featureMatrix.times(userFeatureMatrix.row(u)).getValues();
+        //recItemFeatureValues = featureMatrix.times(itemFeatureMatrix.row(j)).getValues();
+        Map<Integer, Double> userFeatureValueMap = new HashMap<>();
+        if (userFeatureValuesList.get(u) == null) {
+            for (int i = 0; i < numberOfFeatures; i++) {
+                userFeatureValueMap.put(i, userFeatureValues[i]);
+            }
+            // sort features by values
+            userFeatureValueMap = sortByValue(userFeatureValueMap);
+            userFeatureValuesList.set(u, userFeatureValueMap);
+        } else {
+            userFeatureValueMap = userFeatureValuesList.get(u);
+        }
+        int numFeatureTopK = conf.getInt("rec.recommend.numfeatureTopK", 10);
+        Object[] userTopFeatureIndices = Arrays.copyOfRange(userFeatureValueMap.keySet().toArray(), numberOfFeatures - numFeatureTopK, numberOfFeatures);
+        double[] userTopFeatureValues = new double[numFeatureTopK];
+        double[] recItemTopFeatureValues = new double[numFeatureTopK];
+        for (int i=0; i<numFeatureTopK; i++) {
+            int featureIdx = (int) userTopFeatureIndices[numFeatureTopK - 1 - i];
+            userTopFeatureValues[i] = userFeatureValues[featureIdx];
+            recItemTopFeatureValues[i] = recItemFeatureValues[featureIdx];
+        }
+
+        //calc k largest values
+        double largestValue = 0.0;
+        for (int i = 0; i < numFeatureTopK; i++) {
+            largestValue += userTopFeatureValues[i] * recItemFeatureValues[i];
+        }
+        largestValue *= (tradeoff / (numFeatureTopK * maxRate));
+        pred += largestValue;
+
+        return pred;
+    }
+
 
 }

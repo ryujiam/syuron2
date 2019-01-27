@@ -3,10 +3,9 @@ import net.librec.conf.Configuration;
 import net.librec.recommender.cf.ranking.BPRRecommender;
 import net.librec.recommender.cf.rating.NMFRecommender;
 import parameter.gridSearch;
-import recommend.CMFRecommender;
-import recommend.CMFSGDRecommender;
-import recommend.EfmRecommender;
-import recommend.EfmSGD;
+import recommend.*;
+import recommend.EFM.EFMBPRecommender;
+import recommend.EFM.EFMMBPR;
 import validation.validArffDataModel;
 import validation.validKCVDataSplitter;
 
@@ -55,13 +54,18 @@ public class Main {
         Configuration conf = new Configuration();
         //Configuration.Resource paraResource = new Configuration.Resource("cmf/cmf-sgd-rating.properties");
         //Configuration.Resource paraResource = new Configuration.Resource("cmf/cmf-sgd-rating.properties");
-        Configuration.Resource paraResource = new Configuration.Resource("efm/efm-sim-ranking.properties");
+        //Configuration.Resource paraResource = new Configuration.Resource("efm/sgd/efmsgd-rating.properties");
+        //Configuration.Resource paraResource = new Configuration.Resource("efm/efm-sim-ranking.properties");
+        Configuration.Resource paraResource = new Configuration.Resource("efmbpr/efmmbpr-ranking.properties");
         conf.addResource(paraResource);
         gridSearch grid = new gridSearch();
         //CMFRecommender recommender = new CMFRecommender();
         //CMFSGDRecommender recommender = new CMFSGDRecommender();
-        EfmRecommender recommender = new EfmRecommender();
-        //EfmSGD recommender = new EfmSGD();
+        //EfmRecommender recommender = new EfmRecommender();
+        //EfmSGDRecommender recommender = new EfmSGDRecommender();
+        //EFMBPRecommender recommender = new EFMBPRecommender();
+        EFMMBPR recommender = new EFMMBPR();
+
         validKCVDataSplitter dataSplitter = new validKCVDataSplitter(conf);
         validArffDataModel dataModel = new validArffDataModel(conf);
         dataModel.setDatasplitter(dataSplitter);
