@@ -339,7 +339,7 @@ public class EFMMBPR extends EFMBPRecommender {
                         double del = adagrad(userFeatureMatrixLearnRate[userIdx][factorIdx], error, userFeatureVecIdx + index);
                         userFeatureMatrix.plus(userIdx, factorIdx, del);
                         if (userFeatureMatrix.get(userIdx, factorIdx) < 0.0)
-                            featureMatrix.set(userIdx, factorIdx, 0.0);
+                            userFeatureMatrix.set(userIdx, factorIdx, 0.0);
                         loss += lambdaU * userFeatureValue * userFeatureValue;
                     }
 
@@ -719,6 +719,15 @@ public class EFMMBPR extends EFMBPRecommender {
 
             }
             LOG.info("iter:" + iter + ", loss:" + loss);
+        }
+        maxUserFeature = -100000;
+        minUserFeature = 1000000;
+        for (int userIdx = 0; userIdx < numUsers; userIdx++) {
+            for (int featureIdx = 0; featureIdx < numberOfFeatures; featureIdx++) {
+                double predValue = predUserAttention(userIdx, featureIdx);
+                maxUserFeature = Math.max(predValue, maxUserFeature);
+                minUserFeature = Math.min(predValue, minUserFeature);
+            }
         }
     }
 

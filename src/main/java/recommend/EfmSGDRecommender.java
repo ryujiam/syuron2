@@ -249,7 +249,7 @@ public class EfmSGDRecommender extends EfmRecommender{
                         double del = adagrad(userFeatureMatrixLearnRate[userIdx][factorIdx], error, userFeatureVecIdx + index);
                         userFeatureMatrix.plus(userIdx, factorIdx, del);
                         if (userFeatureMatrix.get(userIdx, factorIdx) < 0.0)
-                            featureMatrix.set(userIdx, factorIdx, 0.0);
+                            userFeatureMatrix.set(userIdx, factorIdx, 0.0);
                         loss += lambdaU * userFeatureValue * userFeatureValue;
                     }
                 }
