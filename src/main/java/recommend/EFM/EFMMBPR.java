@@ -238,7 +238,7 @@ public class EFMMBPR extends EFMBPRecommender {
                     sampleSize++;
 
                 }
-                LOG.info("feature help samples for quality is " + qualityToHelpSize);
+                //LOG.info("feature help samples for quality is " + qualityToHelpSize);
                 //update hiddenUserFeatureMatrix, explicitUserFeatureMatrix(H1, U1)
                 Multimap<Integer, Integer> userSample = sampleIndices.get("user");
                 for (Integer userIdx : userSample.keySet()) {
@@ -570,25 +570,32 @@ public class EFMMBPR extends EFMBPRecommender {
                     DenseMatrix batchItemFeatureMatrix = new DenseMatrix(pairs.size(), explicitFeatureNum);
                     int userVecIdx = 0;
                     int itemVecIdx = 0;
-                    boolean posFeatureFlag = true;
                     for (Integer sampleId : pairs) {
                         int userIdx = sampleSet.get(sampleId).get("user");
                         int itemIdx = sampleSet.get(sampleId).get("item");
                         int posFeatureIdx = sampleSet.get(sampleId).get("feature");
                         int negFeatureIdx = sampleSet.get(sampleId).get("negFeature");
                         int negFeatureHelpIdx = sampleSet.get(sampleId).get("negFeatureHelp");
-                        double posPredictRating = predUserAttention(userIdx, posFeatureIdx);
-                        double negPredictRating = predUserAttention(userIdx, negFeatureIdx);
-                        double posHelpPredictRating = predUserAttention(userIdx, posFeatureHelpIdx);
-                        double negHelpPredictRating = predUserAttention(userIdx, negFeatureHelpIdx);
 
                         double diffValue;
                         if (posFeatureIdx == -1) {
+                            double posHelpPredictRating = predUserAttention(userIdx, posFeatureHelpIdx);
+                            double negHelpPredictRating = predUserAttention(userIdx, negFeatureHelpIdx);
                             diffValue = (posHelpPredictRating - negHelpPredictRating);
-                            posFeatureFlag = false;
+                            for (int factorIdx = 0; factorIdx < explicitFeatureNum; factorIdx++) {
+                                batchUserFeatureMatrix.set(userVecIdx, factorIdx, userFeatureMatrix.get(userIdx, factorIdx));
+                            }
                         }
-                        else
+                        else {
+                            double posPredictRating = predUserAttention(userIdx, posFeatureIdx);
+                            double negPredictRating = predUserAttention(userIdx, negFeatureIdx);
+                            double posHelpPredictRating = predUserAttention(userIdx, posFeatureHelpIdx);
+                            double negHelpPredictRating = predUserAttention(userIdx, negFeatureHelpIdx);
                             diffValue = (posPredictRating - negPredictRating) - (posHelpPredictRating - negHelpPredictRating);
+                            for (int factorIdx = 0; factorIdx < explicitFeatureNum; factorIdx++) {
+                                batchUserFeatureMatrix.set(userVecIdx, factorIdx, -userFeatureMatrix.get(userIdx, factorIdx));
+                            }
+                        }
 
 
                         double lossValue = -Math.log(Maths.logistic(diffValue));
@@ -596,7 +603,7 @@ public class EFMMBPR extends EFMBPRecommender {
 
                         double deriValue = Maths.logistic(-diffValue);
                         deriValuesVector.set(userVecIdx, deriValue);
-                        batchUserFeatureMatrix.set(userVecIdx, userFeatureMatrix.row(userIdx));
+                        //batchUserFeatureMatrix.set(userVecIdx, userFeatureMatrix.row(userIdx));
 
                         double itemRatingValue = itemFeatureQuality.get(itemIdx, posFeatureHelpIdx);
                         if (itemRatingValue != 0.0) {
@@ -617,10 +624,7 @@ public class EFMMBPR extends EFMBPRecommender {
                         double realItemRatingValue = featureItemsVector.dot(itemRatingsVector);
                         double estmItemRatingValue = featureItemsVector.dot(itemPredictsVector);
                         double error;
-                        if (posFeatureFlag)
-                            error = lambdaX * ( - estmDiffValue) + lambdaY * (realItemRatingValue - estmItemRatingValue) - lambdaV * posFeatureHelpFactorValue;
-                        else
-                            error = lambdaX * estmDiffValue + lambdaY * (realItemRatingValue - estmItemRatingValue) - lambdaV * posFeatureHelpFactorValue;
+                        error = lambdaX * estmDiffValue + lambdaY * (realItemRatingValue - estmItemRatingValue) - lambdaV * posFeatureHelpFactorValue;
                         featureMatrixLearnRate[posFeatureHelpIdx][factorIdx] += error * error;
                         double del = adagrad(featureMatrixLearnRate[posFeatureHelpIdx][factorIdx], error, userVecIdx + itemVecIdx);
                         if (Double.isInfinite(del))
@@ -644,7 +648,6 @@ public class EFMMBPR extends EFMBPRecommender {
                     DenseMatrix batchItemFeatureMatrix = new DenseMatrix(pairs.size(), explicitFeatureNum);
                     int userVecIdx = 0;
                     int itemVecIdx = 0;
-                    boolean posFeatureFlag = true;
                     for (Integer sampleId : pairs) {
                         int userIdx = sampleSet.get(sampleId).get("user");
                         int itemIdx = sampleSet.get(sampleId).get("item");
@@ -653,17 +656,25 @@ public class EFMMBPR extends EFMBPRecommender {
                         int posFeatureHelpIdx = sampleSet.get(sampleId).get("featureHelp");
                         if (posFeatureHelpIdx == -1)
                             continue;
-                        double posPredictRating = predUserAttention(userIdx, posFeatureIdx);
-                        double negPredictRating = predUserAttention(userIdx, negFeatureIdx);
-                        double posHelpPredictRating = predUserAttention(userIdx, posFeatureHelpIdx);
-                        double negHelpPredictRating = predUserAttention(userIdx, negFeatureHelpIdx);
                         double diffValue;
                         if (posFeatureIdx == -1) {
+                            double posHelpPredictRating = predUserAttention(userIdx, posFeatureHelpIdx);
+                            double negHelpPredictRating = predUserAttention(userIdx, negFeatureHelpIdx);
                             diffValue = (posHelpPredictRating - negHelpPredictRating);
-                            posFeatureFlag = false;
+                            for (int factorIdx = 0; factorIdx < explicitFeatureNum; factorIdx++) {
+                                batchUserFeatureMatrix.set(userVecIdx, factorIdx, -userFeatureMatrix.get(userIdx, factorIdx));
+                            }
                         }
-                        else
+                        else {
+                            double posPredictRating = predUserAttention(userIdx, posFeatureIdx);
+                            double negPredictRating = predUserAttention(userIdx, negFeatureIdx);
+                            double posHelpPredictRating = predUserAttention(userIdx, posFeatureHelpIdx);
+                            double negHelpPredictRating = predUserAttention(userIdx, negFeatureHelpIdx);
                             diffValue = (posPredictRating - negPredictRating) - (posHelpPredictRating - negHelpPredictRating);
+                            for (int factorIdx = 0; factorIdx < explicitFeatureNum; factorIdx++) {
+                                batchUserFeatureMatrix.set(userVecIdx, factorIdx, userFeatureMatrix.get(userIdx, factorIdx));
+                            }
+                        }
 
 
                         double lossValue = -Math.log(Maths.logistic(diffValue));
@@ -671,7 +682,7 @@ public class EFMMBPR extends EFMBPRecommender {
 
                         double deriValue = Maths.logistic(-diffValue);
                         deriValuesVector.set(userVecIdx, deriValue);
-                        batchUserFeatureMatrix.set(userVecIdx, userFeatureMatrix.row(userIdx));
+                        //batchUserFeatureMatrix.set(userVecIdx, userFeatureMatrix.row(userIdx));
 
                         double itemRatingValue = itemFeatureQuality.get(itemIdx, negFeatureHelpIdx);
                         if (itemRatingValue != 0.0) {
@@ -692,10 +703,7 @@ public class EFMMBPR extends EFMBPRecommender {
                         double realItemRatingValue = featureItemsVector.dot(itemRatingsVector);
                         double estmItemRatingValue = featureItemsVector.dot(itemPredictsVector);
                         double error;
-                        if (posFeatureFlag)
-                            error = lambdaX * ( - estmDiffValue) + lambdaY * (realItemRatingValue - estmItemRatingValue) - lambdaV * negFeatureHelpFactorValue;
-                        else
-                            error = lambdaX * estmDiffValue + lambdaY * (realItemRatingValue - estmItemRatingValue) - lambdaV * negFeatureHelpFactorValue;
+                        error = lambdaX * ( estmDiffValue) + lambdaY * (realItemRatingValue - estmItemRatingValue) - lambdaV * negFeatureHelpFactorValue;
                         featureMatrixLearnRate[negFeatureHelpIdx][factorIdx] += error * error;
                         double del = adagrad(featureMatrixLearnRate[negFeatureHelpIdx][factorIdx], error, userVecIdx + itemVecIdx);
                         if (Double.isInfinite(del))
